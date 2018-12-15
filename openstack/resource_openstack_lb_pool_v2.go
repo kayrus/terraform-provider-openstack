@@ -213,7 +213,7 @@ func resourcePoolV2Create(d *schema.ResourceData, meta interface{}) error {
 		err = waitForLBV2LoadBalancer(lbClient, lbID, "ACTIVE", nil, timeout)
 	} else {
 		// Pool exists by now so we can ask for lbID
-		err = waitForLBV2viaPool(lbClient, pool.ID, "ACTIVE", timeout)
+		err = waitForLBV2viaPool(lbClient, pool.ID, "ACTIVE", nil, timeout)
 	}
 	if err != nil {
 		return err
@@ -280,7 +280,7 @@ func resourcePoolV2Update(d *schema.ResourceData, meta interface{}) error {
 	if lbID != "" {
 		err = waitForLBV2LoadBalancer(lbClient, lbID, "ACTIVE", nil, timeout)
 	} else {
-		err = waitForLBV2viaPool(lbClient, d.Id(), "ACTIVE", timeout)
+		err = waitForLBV2viaPool(lbClient, d.Id(), "ACTIVE", nil, timeout)
 	}
 	if err != nil {
 		return err
@@ -303,7 +303,7 @@ func resourcePoolV2Update(d *schema.ResourceData, meta interface{}) error {
 	if lbID != "" {
 		err = waitForLBV2LoadBalancer(lbClient, lbID, "ACTIVE", nil, timeout)
 	} else {
-		err = waitForLBV2viaPool(lbClient, d.Id(), "ACTIVE", timeout)
+		err = waitForLBV2viaPool(lbClient, d.Id(), "ACTIVE", nil, timeout)
 	}
 	if err != nil {
 		return err
