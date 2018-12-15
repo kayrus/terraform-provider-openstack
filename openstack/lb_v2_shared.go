@@ -241,27 +241,14 @@ func waitForLBV2viaPool(lbClient *gophercloud.ServiceClient, id string, target s
 		return err
 	}
 
-	var lbID, listenerID string
 	for _, lb := range pool.Loadbalancers {
-		lbID = lb.ID
-		break
+		return waitForLBV2LoadBalancer(lbClient, lb.ID, target, pending, timeout)
 	}
 	for _, listener := range pool.Listeners {
-		listenerID = listener.ID
-		break
+		return waitForLBV2LoadBalancer(lbClient, listener.ID, target, pending, timeout)
 	}
 
-	return waitForLBV2viaLBorListener(lbClient, lbID, listenerID, target, pending, timeout)
-}
-
-func waitForLBV2viaLBorListener(lbClient *gophercloud.ServiceClient, lbID string, listenerID string, target string, pending []string, timeout time.Duration) error {
-	if lbID != "" {
-		return waitForLBV2LoadBalancer(lbClient, lbID, target, pending, timeout)
-	}
-	if listenerID != "" {
-		return waitForLBV2viaListener(lbClient, listenerID, target, pending, timeout)
-	}
-	return fmt.Errorf("Neither Load Balancer ID nor Listener ID were provided")
+	return fmt.Errorf("Neither a Load Balancer ID nor Listener ID could be determined from pool %s", pool.ID)
 }
 
 func waitForLBV2viaListener(lbClient *gophercloud.ServiceClient, id string, target string, pending []string, timeout time.Duration) error {
@@ -285,7 +272,7 @@ func getLBfromListener(lbClient *gophercloud.ServiceClient, id string) (string, 
 	return "", fmt.Errorf("No Load Balancer found associated with listener %s", id)
 }
 
-func getLB_listener_PoolfromMember(lbClient *gophercloud.ServiceClient, id string) (string, string, string, error) {
+func getLBandListenerandPoolfromMember(lbClient *gophercloud.ServiceClient, id string) (string, string, string, error) {
 	log.Printf("[DEBUG] Trying to get Pool ID and Load balancer ID associated with the member %s", id)
 	poolsPages, err := pools.List(lbClient, pools.ListOpts{}).AllPages()
 	if err != nil {
@@ -317,13 +304,13 @@ func getLB_listener_PoolfromMember(lbClient *gophercloud.ServiceClient, id strin
 	return "", "", "", fmt.Errorf("No Pool found associated with member %s", id)
 }
 
-func waitForLBV2L7policy(lbClient *gophercloud.ServiceClient, id string, target string, pending []string, timeout time.Duration) error {
+func waitForLBV2L7Policy(lbClient *gophercloud.ServiceClient, id string, target string, pending []string, timeout time.Duration) error {
 	log.Printf("[DEBUG] Waiting for l7policy %s to become %s.", id, target)
 
 	stateConf := &resource.StateChangeConf{
 		Target:     []string{target},
 		Pending:    pending,
-		Refresh:    resourceLBV2L7policyRefreshFunc(lbClient, id),
+		Refresh:    resourceLBV2L7PolicyRefreshFunc(lbClient, id),
 		Timeout:    timeout,
 		Delay:      1 * time.Second,
 		MinTimeout: 1 * time.Second,
@@ -345,7 +332,7 @@ func waitForLBV2L7policy(lbClient *gophercloud.ServiceClient, id string, target 
 	return nil
 }
 
-func resourceLBV2L7policyRefreshFunc(lbClient *gophercloud.ServiceClient, id string) resource.StateRefreshFunc {
+func resourceLBV2L7PolicyRefreshFunc(lbClient *gophercloud.ServiceClient, id string) resource.StateRefreshFunc {
 	return func() (interface{}, string, error) {
 		l7policy, err := l7policies.Get(lbClient, id).Extract()
 		if err != nil {
@@ -358,7 +345,7 @@ func resourceLBV2L7policyRefreshFunc(lbClient *gophercloud.ServiceClient, id str
 }
 
 // The first best match will be returned
-func getLBandListenerandL7policyForL7rule(lbClient *gophercloud.ServiceClient, id string, policyID string) (string, string, string, error) {
+func getLBandListenerandL7PolicyForL7rule(lbClient *gophercloud.ServiceClient, id string, policyID string) (string, string, string, error) {
 	log.Printf("[DEBUG] Trying to get Listener ID and Load balancer ID associated with the l7rule '%s' or l7policy '%s'", id, policyID)
 	lbsPages, err := loadbalancers.List(lbClient, loadbalancers.ListOpts{}).AllPages()
 	if err != nil {
@@ -399,7 +386,7 @@ func getLBandListenerForL7Policy(lbClient *gophercloud.ServiceClient, id string)
 	}
 
 	if l7policy.ListenerID == "" {
-		lbID, listenerID, _, err := getLBandListenerandL7policyForL7rule(lbClient, "", id)
+		lbID, listenerID, _, err := getLBandListenerandL7PolicyForL7rule(lbClient, "", id)
 		return lbID, listenerID, err
 	}
 

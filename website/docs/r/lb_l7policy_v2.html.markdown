@@ -8,7 +8,7 @@ description: |-
 
 # openstack\_lb\_l7policy\_v2
 
-Manages a V2 l7policy resource within OpenStack.
+Manages a Load Balancer l7policy resource within OpenStack.
 
 ## Example Usage
 
@@ -105,3 +105,11 @@ The following attributes are exported:
 * `redirect_pool_id` - See Argument Reference above.
 * `redirect_url` - See Argument Reference above.
 * `admin_state_up` - See Argument Reference above.
+
+## Import
+
+Load Balancer L7Policy can be imported using the `id`, e.g.
+
+```
+$ terraform import openstack_lb_l7policy_v2.l7policy_1 8a7a79c2-cf17-4e65-b2ae-ddc8bfcf6c74
+```
