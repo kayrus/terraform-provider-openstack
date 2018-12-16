@@ -94,7 +94,6 @@ The following arguments are supported:
 The following attributes are exported:
 
 * `id` - The unique ID for the L7policy.
-* `loadbalancer_id` - The Load Balancer on which the L7policy is associated with.
 * `region` - See Argument Reference above.
 * `tenant_id` - See Argument Reference above.
 * `name` - See Argument Reference above.

@@ -345,62 +345,60 @@ func resourceLBV2L7PolicyRefreshFunc(lbClient *gophercloud.ServiceClient, id str
 }
 
 // The first best match will be returned
-func getLBandListenerandL7PolicyForL7rule(lbClient *gophercloud.ServiceClient, id string, policyID string) (string, string, string, error) {
-	log.Printf("[DEBUG] Trying to get Listener ID and Load balancer ID associated with the l7rule '%s' or l7policy '%s'", id, policyID)
+func getListenerandL7PolicyForL7Rule(lbClient *gophercloud.ServiceClient, id string, policyID string) (string, string, error) {
+	log.Printf("[DEBUG] Trying to get Listener ID and L7 Policy ID associated with the l7rule '%s' or l7policy '%s'", id, policyID)
 	lbsPages, err := loadbalancers.List(lbClient, loadbalancers.ListOpts{}).AllPages()
 	if err != nil {
-		return "", "", "", fmt.Errorf("No Load Balancers were found")
+		return "", "", fmt.Errorf("No Load Balancers were found")
 	}
 
 	lbs, err := loadbalancers.ExtractLoadBalancers(lbsPages)
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
 	}
 
 	for _, lb := range lbs {
 		statuses, err := loadbalancers.GetStatuses(lbClient, lb.ID).Extract()
 		if err != nil {
-			return "", "", "", err
+			return "", "", err
 		}
 		for _, listener := range statuses.Loadbalancer.Listeners {
 			for _, l7policy := range listener.L7Policies {
 				if l7policy.ID == policyID {
-					return lb.ID, listener.ID, l7policy.ID, nil
+					return listener.ID, l7policy.ID, nil
 				}
 				for _, l7rule := range l7policy.Rules {
 					if l7rule.ID == id {
-						return lb.ID, listener.ID, l7policy.ID, nil
+						return listener.ID, l7policy.ID, nil
 					}
 				}
 			}
 		}
 	}
 
-	return "", "", "", fmt.Errorf("No relationships for l7rule '%s' or l7policy '%s' were found", id, policyID)
+	return "", "", fmt.Errorf("No relationships for l7rule '%s' or l7policy '%s' were found", id, policyID)
 }
 
-func getLBandListenerForL7Policy(lbClient *gophercloud.ServiceClient, id string) (string, string, error) {
+func getListenerForL7Policy(lbClient *gophercloud.ServiceClient, id string) (string, error) {
 	l7policy, err := l7policies.Get(lbClient, id).Extract()
 	if err != nil {
-		return "", "", fmt.Errorf("Unable to get l7policy %s: %s", id, err)
+		return "", fmt.Errorf("Unable to get l7policy %s: %s", id, err)
 	}
 
 	if l7policy.ListenerID == "" {
-		lbID, listenerID, _, err := getLBandListenerandL7PolicyForL7rule(lbClient, "", id)
-		return lbID, listenerID, err
+		listenerID, _, err := getListenerandL7PolicyForL7Rule(lbClient, "", id)
+		return listenerID, err
 	}
 
-	lbID, err := getLBfromListener(lbClient, l7policy.ListenerID)
-
-	return lbID, l7policy.ListenerID, err
+	return l7policy.ListenerID, err
 }
 
-func waitForLBV2L7rule(lbClient *gophercloud.ServiceClient, policyID string, ruleID string, target string, pending []string, timeout time.Duration) error {
+func waitForLBV2L7Rule(lbClient *gophercloud.ServiceClient, policyID string, ruleID string, target string, pending []string, timeout time.Duration) error {
 	log.Printf("[DEBUG] Waiting for l7rule %s to become %s.", ruleID, target)
 	stateConf := &resource.StateChangeConf{
 		Target:     []string{target},
 		Pending:    pending,
-		Refresh:    resourceLBV2L7ruleRefreshFunc(lbClient, policyID, ruleID),
+		Refresh:    resourceLBV2L7RuleRefreshFunc(lbClient, policyID, ruleID),
 		Timeout:    timeout,
 		Delay:      1 * time.Second,
 		MinTimeout: 1 * time.Second,
@@ -420,7 +418,7 @@ func waitForLBV2L7rule(lbClient *gophercloud.ServiceClient, policyID string, rul
 	return nil
 }
 
-func resourceLBV2L7ruleRefreshFunc(lbClient *gophercloud.ServiceClient, policyID string, ruleID string) resource.StateRefreshFunc {
+func resourceLBV2L7RuleRefreshFunc(lbClient *gophercloud.ServiceClient, policyID string, ruleID string) resource.StateRefreshFunc {
 	return func() (interface{}, string, error) {
 		l7policy, err := l7policies.GetRule(lbClient, policyID, ruleID).Extract()
 		if err != nil {
