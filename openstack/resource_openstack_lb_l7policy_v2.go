@@ -13,15 +13,12 @@ import (
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/lbaas_v2/l7policies"
 )
 
-func resourceL7policyV2() *schema.Resource {
+func resourceL7PolicyV2() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceL7policyV2Create,
-		Read:   resourceL7policyV2Read,
-		Update: resourceL7policyV2Update,
-		Delete: resourceL7policyV2Delete,
-		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
-		},
+		Create: resourceL7PolicyV2Create,
+		Read:   resourceL7PolicyV2Read,
+		Update: resourceL7PolicyV2Update,
+		Delete: resourceL7PolicyV2Delete,
 
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(10 * time.Minute),
@@ -103,23 +100,35 @@ func resourceL7policyV2() *schema.Resource {
 	}
 }
 
-func resourceL7policyV2Create(d *schema.ResourceData, meta interface{}) error {
+func resourceL7PolicyV2Create(d *schema.ResourceData, meta interface{}) error {
 	config := meta.(*Config)
 	lbClient, err := chooseLBV2Client(d, config)
 	if err != nil {
 		return fmt.Errorf("Error creating OpenStack networking client: %s", err)
 	}
 
-	var redirectPoolID, redirectURL string
+	// Assign some required variables for use in creation.
+	listenerID := d.Get("listener_id").(string)
+	action := d.Get("action").(string)
+	redirectPoolID := d.Get("redirect_pool_id").(string)
+	redirectURL := d.Get("redirect_url").(string)
+
+	// Ensure the right combination of options have been specified.
+	err = checkL7policyAction(action, redirectURL, redirectPoolID)
+	if err != nil {
+		return fmt.Errorf("Unable to create l7policy: %s", err)
+	}
 
 	adminStateUp := d.Get("admin_state_up").(bool)
 	createOpts := l7policies.CreateOpts{
-		TenantID:     d.Get("tenant_id").(string),
-		Name:         d.Get("name").(string),
-		Description:  d.Get("description").(string),
-		Action:       l7policies.Action(d.Get("action").(string)),
-		ListenerID:   d.Get("listener_id").(string),
-		AdminStateUp: &adminStateUp,
+		TenantID:       d.Get("tenant_id").(string),
+		Name:           d.Get("name").(string),
+		Description:    d.Get("description").(string),
+		Action:         l7policies.Action(action),
+		ListenerID:     listenerID,
+		RedirectPoolID: redirectPoolID,
+		RedirectURL:    redirectURL,
+		AdminStateUp:   &adminStateUp,
 	}
 
 	if v, ok := d.GetOk("position"); ok {
@@ -129,31 +138,17 @@ func resourceL7policyV2Create(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("[DEBUG] Create Options: %#v", createOpts)
 
 	timeout := d.Timeout(schema.TimeoutCreate)
-	listenerID := createOpts.ListenerID
 
-	if v, ok := d.GetOk("redirect_url"); ok {
-		redirectURL = v.(string)
-		createOpts.RedirectURL = redirectURL
-	}
-
-	// Make sure the associated pool is active before proceeding
-	if v, ok := d.GetOk("redirect_pool_id"); ok {
-		redirectPoolID = v.(string)
-		createOpts.RedirectPoolID = redirectPoolID
-
-		err = waitForLBV2viaPool(lbClient, redirectPoolID, "ACTIVE", []string{"PENDING_CREATE", "PENDING_UPDATE"}, timeout)
+	// Make sure the associated pool is active before proceeding.
+	if redirectPoolID != "" {
+		err = waitForLBV2viaPool(lbClient, redirectPoolID, "ACTIVE", nil, timeout)
 		if err != nil {
 			return fmt.Errorf("Error getting %s pool status: %s", redirectPoolID, err)
 		}
 	}
 
-	err = checkL7policyAction(createOpts.Action, redirectURL, redirectPoolID)
-	if err != nil {
-		return err
-	}
-
-	// Wait for Load Balancer via Listener to become active before continuing
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", []string{"PENDING_CREATE", "PENDING_UPDATE"}, timeout)
+	// Wait for Load Balancer via Listener to become active before continuing.
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}
@@ -175,17 +170,17 @@ func resourceL7policyV2Create(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Wait for Load Balancer via Listener to become active before continuing
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", []string{"PENDING_CREATE", "PENDING_UPDATE"}, timeout)
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}
 
 	d.SetId(l7policy.ID)
 
-	return resourceL7policyV2Read(d, meta)
+	return resourceL7PolicyV2Read(d, meta)
 }
 
-func resourceL7policyV2Read(d *schema.ResourceData, meta interface{}) error {
+func resourceL7PolicyV2Read(d *schema.ResourceData, meta interface{}) error {
 	config := meta.(*Config)
 	lbClient, err := chooseLBV2Client(d, config)
 	if err != nil {
@@ -199,21 +194,6 @@ func resourceL7policyV2Read(d *schema.ResourceData, meta interface{}) error {
 
 	log.Printf("[DEBUG] Retrieved l7policy %s: %#v", d.Id(), l7policy)
 
-	listenerID := l7policy.ListenerID
-	// In certain cases neutron LBaaSv2 extension doesn't return "ListenerID"
-	if listenerID == "" {
-		listenerID = d.Get("listener_id").(string)
-	}
-
-	// Resolve dependencies during the import
-	if listenerID == "" {
-		listenerID, err = getListenerForL7Policy(lbClient, d.Id())
-		if err != nil {
-			return CheckDeleted(d, err, "l7policy")
-		}
-	}
-
-	d.Set("listener_id", listenerID)
 	d.Set("action", l7policy.Action)
 	d.Set("description", l7policy.Description)
 	d.Set("tenant_id", l7policy.TenantID)
@@ -227,22 +207,23 @@ func resourceL7policyV2Read(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func resourceL7policyV2Update(d *schema.ResourceData, meta interface{}) error {
+func resourceL7PolicyV2Update(d *schema.ResourceData, meta interface{}) error {
 	config := meta.(*Config)
 	lbClient, err := chooseLBV2Client(d, config)
 	if err != nil {
 		return fmt.Errorf("Error creating OpenStack networking client: %s", err)
 	}
 
-	var doCheckAction bool
-	var updateOpts l7policies.UpdateOpts
-	var redirectPoolID, redirectURL string
+	// Assign some required variables for use in updating.
+	listenerID := d.Get("listener_id").(string)
+	action := d.Get("action").(string)
+	redirectPoolID := d.Get("redirect_pool_id").(string)
+	redirectURL := d.Get("redirect_url").(string)
 
-	timeout := d.Timeout(schema.TimeoutUpdate)
+	var updateOpts l7policies.UpdateOpts
 
 	if d.HasChange("action") {
-		doCheckAction = true
-		updateOpts.Action = l7policies.Action(d.Get("action").(string))
+		updateOpts.Action = l7policies.Action(action)
 	}
 	if d.HasChange("name") {
 		name := d.Get("name").(string)
@@ -253,20 +234,11 @@ func resourceL7policyV2Update(d *schema.ResourceData, meta interface{}) error {
 		updateOpts.Description = &description
 	}
 	if d.HasChange("redirect_pool_id") {
-		doCheckAction = true
 		redirectPoolID = d.Get("redirect_pool_id").(string)
-
-		if redirectPoolID != "" {
-			err = waitForLBV2viaPool(lbClient, redirectPoolID, "ACTIVE", []string{"PENDING_CREATE", "PENDING_UPDATE"}, timeout)
-			if err != nil {
-				return fmt.Errorf("Error getting %s pool status: %s", redirectPoolID, err)
-			}
-		}
 
 		updateOpts.RedirectPoolID = &redirectPoolID
 	}
 	if d.HasChange("redirect_url") {
-		doCheckAction = true
 		redirectURL = d.Get("redirect_url").(string)
 		updateOpts.RedirectURL = &redirectURL
 	}
@@ -278,17 +250,23 @@ func resourceL7policyV2Update(d *schema.ResourceData, meta interface{}) error {
 		updateOpts.AdminStateUp = &adminStateUp
 	}
 
-	listenerID := d.Get("listener_id").(string)
+	// Ensure the right combination of options have been specified.
+	err = checkL7policyAction(action, redirectURL, redirectPoolID)
+	if err != nil {
+		return err
+	}
 
-	if doCheckAction {
-		err = checkL7policyAction(updateOpts.Action, redirectURL, redirectPoolID)
+	// Make sure the pool is active before continuing.
+	timeout := d.Timeout(schema.TimeoutUpdate)
+	if redirectPoolID != "" {
+		err = waitForLBV2viaPool(lbClient, redirectPoolID, "ACTIVE", nil, timeout)
 		if err != nil {
-			return err
+			return fmt.Errorf("Error getting %s pool status: %s", redirectPoolID, err)
 		}
 	}
 
 	// Wait for Load Balancer via Listener to become active before continuing
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", []string{"PENDING_CREATE", "PENDING_UPDATE"}, timeout)
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}
@@ -307,15 +285,15 @@ func resourceL7policyV2Update(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Wait for Load Balancer via Listener to become active before continuing
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", []string{"PENDING_CREATE", "PENDING_UPDATE"}, timeout)
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}
 
-	return resourceL7policyV2Read(d, meta)
+	return resourceL7PolicyV2Read(d, meta)
 }
 
-func resourceL7policyV2Delete(d *schema.ResourceData, meta interface{}) error {
+func resourceL7PolicyV2Delete(d *schema.ResourceData, meta interface{}) error {
 	config := meta.(*Config)
 	lbClient, err := chooseLBV2Client(d, config)
 	if err != nil {
@@ -325,7 +303,7 @@ func resourceL7policyV2Delete(d *schema.ResourceData, meta interface{}) error {
 	timeout := d.Timeout(schema.TimeoutDelete)
 	listenerID := d.Get("listener_id").(string)
 	// Wait for Load Balancer via Listener to become active before continuing
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", []string{"PENDING_CREATE", "PENDING_UPDATE"}, timeout)
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}
@@ -349,7 +327,7 @@ func resourceL7policyV2Delete(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Wait for Load Balancer via Listener to become active before continuing
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", []string{"PENDING_CREATE", "PENDING_UPDATE"}, timeout)
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}
@@ -357,19 +335,20 @@ func resourceL7policyV2Delete(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
-func checkL7policyAction(action l7policies.Action, redirectURL string, redirectPoolID string) (err error) {
+func checkL7policyAction(action, redirectURL, redirectPoolID string) error {
 	if action == "REJECT" {
 		if redirectURL != "" || redirectPoolID != "" {
-			return fmt.Errorf(`"redirect_url" and "redirect_pool_id" should be empty, when "action" is set to %s`, action)
+			return fmt.Errorf(
+				"redirect_url and redirect_pool_id must be empty when action is set to %s", action)
 		}
 	}
 
 	if action == "REDIRECT_TO_POOL" && redirectURL != "" {
-		return fmt.Errorf(`"redirect_url" should be empty, when "action" is set to %s`, action)
+		return fmt.Errorf("redirect_url must be empty when action is set to %s", action)
 	}
 
 	if action == "REDIRECT_TO_URL" && redirectPoolID != "" {
-		return fmt.Errorf(`"redirect_pool_id" should be empty, when "action" is set to %s`, action)
+		return fmt.Errorf("redirect_pool_id must be empty when action is set to %s", action)
 	}
 
 	return nil
