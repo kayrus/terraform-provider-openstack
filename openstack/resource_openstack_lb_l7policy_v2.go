@@ -145,14 +145,14 @@ func resourceL7PolicyV2Create(d *schema.ResourceData, meta interface{}) error {
 
 	// Make sure the associated pool is active before proceeding.
 	if redirectPoolID != "" {
-		err = waitForLBV2viaPool(lbClient, redirectPoolID, "ACTIVE", nil, timeout)
+		err = waitForLBV2Pool(lbClient, redirectPoolID, "ACTIVE", lbV2PoolPendingStatuses, timeout)
 		if err != nil {
 			return fmt.Errorf("Error getting %s pool status: %s", redirectPoolID, err)
 		}
 	}
 
 	// Wait for Load Balancer via Listener to become active before continuing.
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbV2LBPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}
@@ -174,7 +174,7 @@ func resourceL7PolicyV2Create(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Wait for Load Balancer via Listener to become active before continuing
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbV2LBPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}
@@ -263,14 +263,14 @@ func resourceL7PolicyV2Update(d *schema.ResourceData, meta interface{}) error {
 	// Make sure the pool is active before continuing.
 	timeout := d.Timeout(schema.TimeoutUpdate)
 	if redirectPoolID != "" {
-		err = waitForLBV2viaPool(lbClient, redirectPoolID, "ACTIVE", nil, timeout)
+		err = waitForLBV2Pool(lbClient, redirectPoolID, "ACTIVE", lbV2PoolPendingStatuses, timeout)
 		if err != nil {
 			return fmt.Errorf("Error getting %s pool status: %s", redirectPoolID, err)
 		}
 	}
 
 	// Wait for Load Balancer via Listener to become active before continuing
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbV2LBPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}
@@ -289,7 +289,7 @@ func resourceL7PolicyV2Update(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Wait for Load Balancer via Listener to become active before continuing
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbV2LBPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}
@@ -307,7 +307,7 @@ func resourceL7PolicyV2Delete(d *schema.ResourceData, meta interface{}) error {
 	timeout := d.Timeout(schema.TimeoutDelete)
 	listenerID := d.Get("listener_id").(string)
 	// Wait for Load Balancer via Listener to become active before continuing
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbV2LBPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}
@@ -331,7 +331,7 @@ func resourceL7PolicyV2Delete(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Wait for Load Balancer via Listener to become active before continuing
-	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbPendingStatuses, timeout)
+	err = waitForLBV2viaListener(lbClient, listenerID, "ACTIVE", lbV2LBPendingStatuses, timeout)
 	if err != nil {
 		return err
 	}

@@ -16,9 +16,10 @@ import (
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/lbaas_v2/pools"
 )
 
-// lbPendingStatuses are the valid statuses a LoadBalancer will be in while
-// it's updating.
-var lbPendingStatuses = []string{"PENDING_CREATE", "PENDING_UPDATE"}
+// The following are the valid statuses for given load balancer resources
+// when they are pending updates.
+var lbV2LBPendingStatuses = []string{"PENDING_CREATE", "PENDING_UPDATE"}
+var lbV2PoolPendingStatuses = []string{"PENDING_CREATE", "PENDING_UPDATE"}
 
 // chooseLBV2Client will determine which load balacing client to use:
 // Either the Octavia/LBaaS client or the Neutron/Networking v2 client.
