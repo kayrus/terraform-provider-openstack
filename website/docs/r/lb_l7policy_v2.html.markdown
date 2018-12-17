@@ -107,8 +107,9 @@ The following attributes are exported:
 
 ## Import
 
-Load Balancer L7Policy can be imported using the `id`, e.g.
+Load Balancer L7Policy can be imported using the Listener ID and L7 Policy ID
+separated by a slash. e.g.:
 
 ```
-$ terraform import openstack_lb_l7policy_v2.l7policy_1 8a7a79c2-cf17-4e65-b2ae-ddc8bfcf6c74
+$ terraform import openstack_lb_l7policy_v2.l7policy_1 dd43cbfa-cb7a-4cd9-8fad-84db92d0e9bd/8a7a79c2-cf17-4e65-b2ae-ddc8bfcf6c74
 ```

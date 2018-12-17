@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform/helper/resource"
@@ -339,21 +340,17 @@ func resourceL7PolicyV2Delete(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceL7PolicyV2Import(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	l7policyID := d.Id()
-
-	config := meta.(*Config)
-	lbClient, err := chooseLBV2Client(d, config)
-	if err != nil {
-		return nil, fmt.Errorf("Error creating OpenStack networking client: %s", err)
+	parts := strings.SplitN(d.Id(), "/", 2)
+	if len(parts) != 2 {
+		err := fmt.Errorf("Invalid format specified for l7 Policy. Format must be <listener id>/<l7policy id>")
+		return nil, err
 	}
 
-	l7policy, err := l7policies.Get(lbClient, l7policyID).Extract()
-	if err != nil {
-		return nil, fmt.Errorf("Unable to query for l7 policy %s: %s", l7policyID, err)
-	}
+	listenerID := parts[0]
+	l7policyID := parts[1]
 
 	d.SetId(l7policyID)
-	d.Set("listener_id", l7policy.ListenerID)
+	d.Set("listener_id", listenerID)
 
 	return []*schema.ResourceData{d}, nil
 }
