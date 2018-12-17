@@ -12,7 +12,7 @@ import (
 )
 
 func TestAccLBV2L7policy_basic(t *testing.T) {
-	var l7policy l7policies.L7Policy
+	var l7Policy l7policies.L7Policy
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheckLB(t) },
@@ -22,7 +22,7 @@ func TestAccLBV2L7policy_basic(t *testing.T) {
 			resource.TestStep{
 				Config: testAccCheckLBV2L7policyConfig_basic,
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckLBV2L7policyExists("openstack_lb_l7policy_v2.l7policy_1", &l7policy),
+					testAccCheckLBV2L7policyExists("openstack_lb_l7policy_v2.l7policy_1", &l7Policy),
 					resource.TestCheckResourceAttr(
 						"openstack_lb_l7policy_v2.l7policy_1", "name", "test"),
 					resource.TestCheckResourceAttr(
@@ -39,7 +39,7 @@ func TestAccLBV2L7policy_basic(t *testing.T) {
 			resource.TestStep{
 				Config: testAccCheckLBV2L7policyConfig_update1,
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckLBV2L7policyExists("openstack_lb_l7policy_v2.l7policy_1", &l7policy),
+					testAccCheckLBV2L7policyExists("openstack_lb_l7policy_v2.l7policy_1", &l7Policy),
 					resource.TestCheckResourceAttr(
 						"openstack_lb_l7policy_v2.l7policy_1", "name", "test"),
 					resource.TestCheckResourceAttr(
@@ -58,7 +58,7 @@ func TestAccLBV2L7policy_basic(t *testing.T) {
 			resource.TestStep{
 				Config: testAccCheckLBV2L7policyConfig_update2,
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckLBV2L7policyExists("openstack_lb_l7policy_v2.l7policy_1", &l7policy),
+					testAccCheckLBV2L7policyExists("openstack_lb_l7policy_v2.l7policy_1", &l7Policy),
 					resource.TestCheckResourceAttr(
 						"openstack_lb_l7policy_v2.l7policy_1", "name", "test_updated"),
 					resource.TestCheckResourceAttr(
@@ -78,7 +78,7 @@ func TestAccLBV2L7policy_basic(t *testing.T) {
 			resource.TestStep{
 				Config: testAccCheckLBV2L7policyConfig_update3,
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckLBV2L7policyExists("openstack_lb_l7policy_v2.l7policy_1", &l7policy),
+					testAccCheckLBV2L7policyExists("openstack_lb_l7policy_v2.l7policy_1", &l7Policy),
 					resource.TestCheckResourceAttr(
 						"openstack_lb_l7policy_v2.l7policy_1", "name", "test_updated"),
 					resource.TestCheckResourceAttr(
@@ -110,14 +110,14 @@ func testAccCheckLBV2L7policyDestroy(s *terraform.State) error {
 
 		_, err := l7policies.Get(lbClient, rs.Primary.ID).Extract()
 		if err == nil {
-			return fmt.Errorf("L7policy still exists: %s", rs.Primary.ID)
+			return fmt.Errorf("L7 Policy still exists: %s", rs.Primary.ID)
 		}
 	}
 
 	return nil
 }
 
-func testAccCheckLBV2L7policyExists(n string, l7policy *l7policies.L7Policy) resource.TestCheckFunc {
+func testAccCheckLBV2L7policyExists(n string, l7Policy *l7policies.L7Policy) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[n]
 		if !ok {
@@ -143,7 +143,7 @@ func testAccCheckLBV2L7policyExists(n string, l7policy *l7policies.L7Policy) res
 			return fmt.Errorf("Policy not found")
 		}
 
-		*l7policy = *found
+		*l7Policy = *found
 
 		return nil
 	}

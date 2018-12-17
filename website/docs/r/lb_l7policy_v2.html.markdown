@@ -3,12 +3,12 @@ layout: "openstack"
 page_title: "OpenStack: openstack_lb_l7policy_v2"
 sidebar_current: "docs-openstack-resource-lb-l7policy-v2"
 description: |-
-  Manages a V2 l7policy resource within OpenStack.
+  Manages a V2 L7 Policy resource within OpenStack.
 ---
 
 # openstack\_lb\_l7policy\_v2
 
-Manages a Load Balancer l7policy resource within OpenStack.
+Manages a Load Balancer L7 Policy resource within OpenStack.
 
 ## Example Usage
 
@@ -47,7 +47,7 @@ resource "openstack_lb_pool_v2" "pool_1" {
 resource "openstack_lb_l7policy_v2" "l7policy_1" {
   name             = "test"
   action           = "REDIRECT_TO_POOL"
-  description      = "test l7policy"
+  description      = "test l7 policy"
   position         = 1
   listener_id      = "${openstack_lb_listener_v2.listener_1.id}"
   redirect_pool_id = "${openstack_lb_pool_v2.pool_1.id}"
