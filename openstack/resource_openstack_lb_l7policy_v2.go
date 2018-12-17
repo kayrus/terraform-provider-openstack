@@ -19,6 +19,9 @@ func resourceL7PolicyV2() *schema.Resource {
 		Read:   resourceL7PolicyV2Read,
 		Update: resourceL7PolicyV2Update,
 		Delete: resourceL7PolicyV2Delete,
+		Importer: &schema.ResourceImporter{
+			resourceL7PolicyV2Import,
+		},
 
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(10 * time.Minute),
@@ -333,6 +336,26 @@ func resourceL7PolicyV2Delete(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	return nil
+}
+
+func resourceL7PolicyV2Import(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	l7policyID := d.Id()
+
+	config := meta.(*Config)
+	lbClient, err := chooseLBV2Client(d, config)
+	if err != nil {
+		return nil, fmt.Errorf("Error creating OpenStack networking client: %s", err)
+	}
+
+	l7policy, err := l7policies.Get(lbClient, l7policyID).Extract()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to query for l7 policy %s: %s", l7policyID, err)
+	}
+
+	d.SetId(l7policyID)
+	d.Set("listener_id", l7policy.ListenerID)
+
+	return []*schema.ResourceData{d}, nil
 }
 
 func checkL7policyAction(action, redirectURL, redirectPoolID string) error {
