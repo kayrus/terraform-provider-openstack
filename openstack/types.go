@@ -191,7 +191,7 @@ func (lrt *LogRoundTripper) formatJSON(raw []byte) string {
 	// Ignore the catalog
 	if v, ok := data["token"].(map[string]interface{}); ok {
 		if _, ok := v["catalog"]; ok {
-			return ""
+			v["catalog"] = "skipped"
 		}
 	}
 
