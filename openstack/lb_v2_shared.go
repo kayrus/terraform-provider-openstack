@@ -1037,9 +1037,12 @@ func expandLBMembersV2(members *schema.Set) []octaviapools.BatchUpdateMemberOpts
 				Address:      rawMap["address"].(string),
 				ProtocolPort: rawMap["protocol_port"].(int),
 				Name:         &name,
-				SubnetID:     &subnetID,
 				Weight:       &weight,
 				AdminStateUp: &adminStateUp,
+			}
+
+			if subnetID != "" {
+				member.SubnetID = &subnetID
 			}
 
 			m = append(m, member)
