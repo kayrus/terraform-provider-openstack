@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
+	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/listeners"
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/loadbalancers"
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/pools"
 )
@@ -287,7 +288,7 @@ func resourceOctaviaV2() *schema.Resource {
 				Set:      schema.HashString,
 			},
 
-			"listeners": {
+			"listener": {
 				Type:     schema.TypeSet,
 				Optional: true,
 				Elem: &schema.Resource{
@@ -558,6 +559,37 @@ func resourceOctaviaExpandPoolPersistenceV2(raw interface{}) (*pools.SessionPers
 	return &persistence, nil
 }
 
+func expandPoolV2(v map[string]interface{}) (*pools.CreateOpts, error) {
+	var p pools.CreateOpts
+
+	if v, ok := v["name"]; ok {
+		p.Name = v.(string)
+	}
+	if v, ok := v["description"]; ok {
+		p.Description = v.(string)
+	}
+	if v, ok := v["protocol"]; ok {
+		p.Protocol = pools.Protocol(v.(string))
+	}
+	if v, ok := v["lb_method"]; ok {
+		p.LBMethod = pools.LBMethod(v.(string))
+	}
+	if v, ok := v["persistence"]; ok {
+		if v, err := resourceOctaviaExpandPoolPersistenceV2(v); err != nil {
+			return nil, err
+		} else {
+			p.Persistence = v
+		}
+	}
+	if v, ok := v["member"]; ok {
+		if v, ok := v.(*schema.Set); ok {
+			p.Members = expandLBMembersV2(v)
+		}
+	}
+
+	return &p, nil
+}
+
 func resourceOctaviaExpandPoolV2(raw interface{}) ([]pools.CreateOpts, error) {
 	if raw != nil {
 		if v, ok := raw.(*schema.Set); ok {
@@ -565,38 +597,117 @@ func resourceOctaviaExpandPoolV2(raw interface{}) ([]pools.CreateOpts, error) {
 
 			for _, v := range v.List() {
 				if v, ok := v.(map[string]interface{}); ok {
-					var p pools.CreateOpts
-
-					if v, ok := v["name"]; ok {
-						p.Name = v.(string)
-					}
-					if v, ok := v["description"]; ok {
-						p.Description = v.(string)
-					}
-					if v, ok := v["protocol"]; ok {
-						p.Protocol = pools.Protocol(v.(string))
-					}
-					if v, ok := v["lb_method"]; ok {
-						p.LBMethod = pools.LBMethod(v.(string))
-					}
-					if v, ok := v["persistence"]; ok {
-						if v, err := resourceOctaviaExpandPoolPersistenceV2(v); err != nil {
-							return nil, err
-						} else {
-							p.Persistence = v
-						}
-					}
-					if v, ok := v["member"]; ok {
-						if v, ok := v.(*schema.Set); ok {
-							p.Members = expandLBMembersV2(v)
-						}
+					p, err := expandPoolV2(v)
+					if err != nil {
+						return nil, err
 					}
 
-					res = append(res, p)
+					res = append(res, *p)
 				}
 			}
 
 			return res, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func resourceOctaviaExpandListenerV2(raw interface{}) ([]listeners.CreateOpts, error) {
+	if raw != nil {
+		if v, ok := raw.(*schema.Set); ok {
+			var res []listeners.CreateOpts
+
+			for _, v := range v.List() {
+				if v, ok := v.(map[string]interface{}); ok {
+					p, err := expandListenerV2(v)
+					if err != nil {
+						return nil, err
+					}
+
+					res = append(res, *p)
+				}
+			}
+
+			return res, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func expandListenerV2(v map[string]interface{}) (*listeners.CreateOpts, error) {
+	var p listeners.CreateOpts
+
+	if v, ok := v["protocol"]; ok {
+		p.Protocol = listeners.Protocol(v.(string))
+	}
+	if v, ok := v["protocol_port"]; ok {
+		p.ProtocolPort = v.(int)
+	}
+	if v, ok := v["name"]; ok {
+		p.Name = v.(string)
+	}
+	if v, ok := v["description"]; ok {
+		p.Description = v.(string)
+	}
+	if v, ok := v["default_pool"]; ok {
+		var err error
+		if v, ok := v.(map[string]interface{}); ok {
+		p.DefaultPool, err = expandPoolV2(v)
+		if err != nil {
+			return nil, err
+		}
+		}
+	}
+	if v, ok := v["connection_limit"]; ok {
+		v := v.(int)
+		p.ConnLimit = &v
+	}
+	if v, ok := v["default_tls_container_ref"]; ok {
+		p.DefaultTlsContainerRef = v.(string)
+	}
+	if v, ok := v["sni_container_refs"]; ok {
+		v := expandToStringSlice(v.([]interface{}))
+		p.SniContainerRefs = v
+	}
+	if v, ok := v["admin_state_up"]; ok {
+		v := v.(bool)
+		p.AdminStateUp = &v
+	}
+	if v, ok := v["timeout_client_data"]; ok {
+		v := v.(int)
+		p.TimeoutClientData = &v
+	}
+	if v, ok := v["timeout_member_connect"]; ok {
+		v := v.(int)
+		p.TimeoutMemberConnect = &v
+	}
+	if v, ok := v["timeout_member_data"]; ok {
+		v := v.(int)
+		p.TimeoutMemberData = &v
+	}
+	if v, ok := v["timeout_tcp_inspect"]; ok {
+		v := v.(int)
+		p.TimeoutTCPInspect = &v
+	}
+	if v, ok := v["insert_headers"]; ok {
+		p.InsertHeaders = expandToMapStringString(v.(map[string]interface{}))
+	}
+	if v, ok := v["allowed_cidrs"]; ok {
+		p.AllowedCIDRs = expandToStringSlice(v.([]interface{}))
+	}
+	return &p, nil
+}
+
+func resourceOctaviaExpandDefaultPoolV2(raw interface{}) (*pools.CreateOpts, error) {
+	if raw != nil {
+		if v, ok := raw.([]interface{}); ok {
+			for _, v := range v {
+				if v, ok := v.(map[string]interface{}); ok {
+					return expandPoolV2(v)
+				}
+			}
 		}
 	}
 
@@ -617,6 +728,11 @@ func V2OctaviaCreateOpts(d *schema.ResourceData, config *Config) (*loadbalancers
 		return nil, err
 	}
 
+	listener, err := resourceOctaviaExpandListenerV2(d.Get("listener"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &loadbalancers.CreateOpts{
 		Name:         d.Get("name").(string),
 		Description:  d.Get("description").(string),
@@ -628,6 +744,7 @@ func V2OctaviaCreateOpts(d *schema.ResourceData, config *Config) (*loadbalancers
 		FlavorID:     d.Get("flavor_id").(string),
 		Provider:     lbProvider,
 		Pools:        pool,
+		Listeners:    listener,
 	}, nil
 }
 

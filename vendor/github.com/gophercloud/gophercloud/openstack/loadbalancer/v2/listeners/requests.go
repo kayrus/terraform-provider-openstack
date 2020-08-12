@@ -86,7 +86,7 @@ type CreateOptsBuilder interface {
 // CreateOpts represents options for creating a listener.
 type CreateOpts struct {
 	// The load balancer on which to provision this listener.
-	LoadbalancerID string `json:"loadbalancer_id" required:"true"`
+	LoadbalancerID string `json:"loadbalancer_id,omitempty"`
 
 	// The protocol - can either be TCP, HTTP, HTTPS or TERMINATED_HTTPS.
 	Protocol Protocol `json:"protocol" required:"true"`
