@@ -172,6 +172,10 @@ type UpdateOpts struct {
 	// or false (DOWN).
 	AdminStateUp *bool `json:"admin_state_up,omitempty"`
 
+        // Persistence is the session persistence of the pool.
+        // Omit this field to prevent session persistence.
+        Persistence *SessionPersistence `json:"session_persistence,omitempty"`
+
 	Members *[]BatchUpdateMemberOpts `json:"members,omitempty"`
 
 	Monitor *UpdateOpts `json:"healthmonitor,omitempty"`

@@ -40,7 +40,7 @@ type CreateOpts struct {
 	Name string `json:"name,omitempty"`
 
 	// The ID of the listener.
-	ListenerID string `json:"listener_id" required:"true"`
+	ListenerID string `json:"listener_id,omitempty"`
 
 	// The L7 policy action. One of REDIRECT_TO_POOL, REDIRECT_TO_URL, or REJECT.
 	Action Action `json:"action" required:"true"`
