@@ -178,7 +178,7 @@ type UpdateOpts struct {
 
 	Members *[]BatchUpdateMemberOpts `json:"members,omitempty"`
 
-	Monitor *UpdateOpts `json:"healthmonitor,omitempty"`
+	Monitor *monitors.UpdateOpts `json:"healthmonitor,omitempty"`
 }
 
 // ToPoolUpdateMap builds a request body from UpdateOpts.
