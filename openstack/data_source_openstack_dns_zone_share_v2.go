@@ -15,6 +15,11 @@ func dataSourceDNSZoneShareV2() *schema.Resource {
 	return &schema.Resource{
 		ReadContext: dataSourceDNSZoneShareV2Read,
 		Schema: map[string]*schema.Schema{
+			"region": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Computed: true,
+			},
 			"zone_id": {
 				Type:        schema.TypeString,
 				Required:    true,
@@ -53,33 +58,11 @@ func dataSourceDNSZoneShareV2() *schema.Resource {
 	}
 }
 
-// flattenZoneShares converts a slice of ZoneShare objects into a slice of maps.
-// If targetFilter is provided and non-empty, only shares with a matching TargetProjectID are included.
-func flattenZoneShares(shares []ZoneShare, targetFilter interface{}) []map[string]interface{} {
-	results := make([]map[string]interface{}, 0)
-	filter := ""
-	if targetFilter != nil {
-		if s, ok := targetFilter.(string); ok {
-			filter = s
-		}
-	}
-	for _, s := range shares {
-		if filter != "" && s.TargetProjectID != filter {
-			continue
-		}
-		results = append(results, map[string]interface{}{
-			"share_id":   s.ID,
-			"project_id": s.TargetProjectID,
-		})
-	}
-	return results
-}
-
 // dataSourceDNSZoneShareV2Read fetches the zone details and associated shares,
 // updates the zone_id to the zone's FQDN, and sets the "shares" attribute using the flatten helper.
 func dataSourceDNSZoneShareV2Read(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	config := meta.(*Config)
-	client, err := config.DNSV2Client(ctx, "")
+	client, err := config.DNSV2Client(ctx, GetRegion(d, config))
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("error creating DNS client: %s", err))
 	}
@@ -133,4 +116,26 @@ func dataSourceDNSZoneShareV2Read(ctx context.Context, d *schema.ResourceData, m
 	// Use the original zoneID as the data source ID.
 	d.SetId(zoneID)
 	return nil
+}
+
+// flattenZoneShares converts a slice of ZoneShare objects into a slice of maps.
+// If targetFilter is provided and non-empty, only shares with a matching TargetProjectID are included.
+func flattenZoneShares(shares []ZoneShare, targetFilter interface{}) []map[string]interface{} {
+	results := make([]map[string]interface{}, 0)
+	filter := ""
+	if targetFilter != nil {
+		if s, ok := targetFilter.(string); ok {
+			filter = s
+		}
+	}
+	for _, s := range shares {
+		if filter != "" && s.TargetProjectID != filter {
+			continue
+		}
+		results = append(results, map[string]interface{}{
+			"share_id":   s.ID,
+			"project_id": s.TargetProjectID,
+		})
+	}
+	return results
 }

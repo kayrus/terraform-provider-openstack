@@ -27,16 +27,18 @@ data "openstack_dns_zone_share_v2" "example" {
 
 The following arguments are supported:
 
-- `zone_id` (Required) - The ID of the DNS zone for which to list shares.
+* `zone_id` (Required) - The ID of the DNS zone for which to list shares.
 
-- `target_project_id` (Optional) - If provided, the data source returns only the shares with this target project ID.
+* `target_project_id` (Optional) - If provided, the data source returns only the shares with this target project ID.
 
-- `project_id` (Optional) - The owner project ID. If omitted, it is derived from the zone details.
+* `project_id` (Optional) - The owner project ID. If omitted, it is derived from the zone details.
 
 
 ## Attributes Reference
 
-- Shares
-  - A list of objects representing DNS zone shares. Each object includes:
-    - `share_id`: The ID of the share.
-    - `project_id`: The target project ID associated with the share.
+`id` is set to the ID of the found DNS share. In addition, the following attributes
+are exported:
+
+* `share_id`: The ID of the share.
+
+* `project_id`: The target project ID associated with the share.

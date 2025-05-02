@@ -27,6 +27,11 @@ func resourceDNSZoneShareV2() *schema.Resource {
 			StateContext: resourceDNSZoneShareV2Importer,
 		},
 		Schema: map[string]*schema.Schema{
+			"region": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Computed: true,
+			},
 			"zone_id": {
 				Type:        schema.TypeString,
 				Required:    true,
@@ -59,7 +64,7 @@ func resourceDNSZoneShareV2() *schema.Resource {
 // and simplified (<zone_id>/<share_id>) imports.
 func resourceDNSZoneShareV2Importer(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 	config := meta.(*Config)
-	client, err := config.DNSV2Client(ctx, "")
+	client, err := config.DNSV2Client(ctx, GetRegion(d, config))
 	if err != nil {
 		return nil, fmt.Errorf("error creating OpenStack DNS client: %s", err)
 	}
@@ -132,35 +137,22 @@ func resourceDNSZoneShareV2Importer(ctx context.Context, d *schema.ResourceData,
 
 func resourceDNSZoneShareV2Create(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	config := meta.(*Config)
-	client, err := config.DNSV2Client(ctx, "")
+	dnsClient, err := config.DNSV2Client(ctx, GetRegion(d, config))
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("error creating OpenStack DNS client: %s", err))
+	}
+
+	if err := dnsClientSetAuthHeader(ctx, d, dnsClient); err != nil {
+		return diag.Errorf("Error setting dns client auth headers: %s", err)
 	}
 
 	zoneID := d.Get("zone_id").(string)
 	targetProjectID := d.Get("target_project_id").(string)
 
-	// Use the provided project_id if set; otherwise, retrieve it from the zone.
-	var sudoProjectID string
-	if v, ok := d.GetOk("project_id"); ok && v.(string) != "" {
-		sudoProjectID = v.(string)
-	} else {
-		zone, err := zones.Get(ctx, client, zoneID).Extract()
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("error retrieving zone details for zone %s: %s", zoneID, err))
-		}
-		sudoProjectID = zone.ProjectID
-		d.Set("project_id", sudoProjectID)
-	}
-
 	shareOpts := zones.ShareZoneOpts{
 		TargetProjectID: targetProjectID,
 	}
-
-	client.Microversion = "2.0"
-	client.MoreHeaders = map[string]string{
-		"X-Auth-Sudo-Project-Id": sudoProjectID,
-	}
+	dnsClient.Microversion = "2.0"
 
 	if err := zones.Share(ctx, client, zoneID, shareOpts).ExtractErr(); err != nil {
 		return diag.FromErr(fmt.Errorf("error sharing DNS zone %s with project %s: %s", zoneID, targetProjectID, err))
@@ -183,14 +175,19 @@ func resourceDNSZoneShareV2Create(ctx context.Context, d *schema.ResourceData, m
 
 	d.SetId(fmt.Sprintf("%s/%s", zoneID, shareID))
 	d.Set("share_id", shareID)
+
 	return resourceDNSZoneShareV2Read(ctx, d, meta)
 }
 
 func resourceDNSZoneShareV2Read(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	config := meta.(*Config)
-	client, err := config.DNSV2Client(ctx, "")
+	dnsClient, err := config.DNSV2Client(ctx, GetRegion(d, config))
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("error creating OpenStack DNS client: %s", err))
+	}
+
+	if err := dnsClientSetAuthHeader(ctx, d, dnsClient); err != nil {
+		return diag.Errorf("Error setting dns client auth headers: %s", err)
 	}
 
 	zoneID, shareID, err := parseDNSSharedZoneID(d.Id())
@@ -232,9 +229,13 @@ func resourceDNSZoneShareV2Read(ctx context.Context, d *schema.ResourceData, met
 
 func resourceDNSZoneShareV2Delete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	config := meta.(*Config)
-	client, err := config.DNSV2Client(ctx, "")
+	dnsClient, err := config.DNSV2Client(ctx, GetRegion(d, config))
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("error creating OpenStack DNS client: %s", err))
+	}
+
+	if err := dnsClientSetAuthHeader(ctx, d, dnsClient); err != nil {
+		return diag.Errorf("Error setting dns client auth headers: %s", err)
 	}
 
 	zoneID, shareID, err := parseDNSSharedZoneID(d.Id())
@@ -242,32 +243,11 @@ func resourceDNSZoneShareV2Delete(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(err)
 	}
 
-	var sudoProjectID string
-	if v, ok := d.GetOk("project_id"); ok && v.(string) != "" {
-		sudoProjectID = v.(string)
-	} else {
-		zone, err := zones.Get(ctx, client, zoneID).Extract()
-		if err != nil {
-			return diag.FromErr(fmt.Errorf("error retrieving zone details for zone %s: %s", zoneID, err))
-		}
-		sudoProjectID = zone.ProjectID
-		d.Set("project_id", sudoProjectID)
-	}
-
-	url := client.ServiceURL("zones", zoneID, "shares", shareID)
-	reqOpts := &gophercloud.RequestOpts{
-		MoreHeaders: map[string]string{
-			"X-Auth-Sudo-Project-Id": sudoProjectID,
-		},
-	}
-
-	resp, err := client.Delete(ctx, url, reqOpts)
+	err = zones.Unshare(ctx, client, zoneID, shareID).ExtractErr()
 	if err != nil {
 		return diag.FromErr(fmt.Errorf("error unsharing DNS zone %s: %s", zoneID, err))
 	}
-	defer resp.Body.Close()
 
-	d.SetId("")
 	return nil
 }
 
@@ -282,6 +262,7 @@ func parseDNSSharedZoneID(id string) (string, string, error) {
 	return parts[0], parts[1], nil
 }
 
+// TODO: switch to gophercloud's list function when available
 func listZoneShares(ctx context.Context, client *gophercloud.ServiceClient, zoneID string, ownerProjectID string) ([]ZoneShare, error) {
 	url := client.ServiceURL("zones", zoneID, "shares")
 	var result struct {
